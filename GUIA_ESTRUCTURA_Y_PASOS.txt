@@ -1,0 +1,34 @@
+Guía breve: estructura y pasos
+
+Propósito
+Generar plantillas MiniZinc a partir de una entrada y ofrecer una GUI
+ligera para mostrar y copiar el código generado.
+
+Estructura clave (rápida)
+- `src/app/` — punto de entrada.
+- `src/core/` — lógica: `parser_entrada.py`, `validador_entrada.py`, `generador_minizinc.py`.
+- `src/gui/` — interfaz (ventana y componentes).
+- `minizinc/` — modelos y datos de ejemplo (`model/`, `data/`).
+- `tests/`, `data/`, `scripts/` — casos de prueba, muestras y utilidades.
+
+Pasos esenciales (mínimos)
+1) Parser: implementar `parsear_texto_entrada(texto)` en `src/core/parser_entrada.py`.
+2) Validador: comprobar rango y consistencia en `src/core/validador_entrada.py`.
+3) Generador: producir el string MiniZinc en `src/core/generador_minizinc.py`.
+4) GUI: mostrar entrada, botón `Generar` y área de salida copiable en `src/gui/`.
+
+Cómo probar rápido
+- Ejecuta: `PYTHONPATH=. python3 scripts/test_generador.py` para ver un ejemplo.
+- Para la GUI (cuando esté lista): `bash scripts/run_app.sh`.
+
+Entrega y documentación
+- Informe: escribe secciones sobre modelo, implementación, pruebas,
+  análisis y conclusiones en `docs/informe_ieee/secciones/`.
+- Código: deja `generador_minizinc.py` responsable solo de crear texto
+  MiniZinc; la GUI debe mostrar y no ejecutar soluciones internamente.
+
+Notas finales
+- Prioriza una interfaz que muestre código claro y copiable.
+- Si quieres, implemento ahora una GUI mínima que muestre el código
+  y evite pegar soluciones en el campo de salida.
+

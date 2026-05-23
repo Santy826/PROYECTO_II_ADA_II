@@ -1,0 +1,7 @@
+12
+5
+Palmira 2 3
+Cali 10 2
+Buga 11 0
+Tulua 0 3
+RioFrio 1 2

@@ -1,0 +1,2 @@
+# Dependencias base (se ajustarán al implementar)
+tk
