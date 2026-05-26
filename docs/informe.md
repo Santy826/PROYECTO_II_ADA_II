@@ -1,3 +1,32 @@
+# 1. Modelo del problema
+
+## Definición
+
+Pendiente de completar.
+
+## Variables y restricciones
+
+Pendiente de completar.
+
+## Función objetivo
+
+Pendiente de completar.
+
+# 2. Explicación de implementación
+
+Describir decisiones de diseño, flujo de datos y módulos sin incluir código.
+
+# 3. Pruebas con datos específicos
+
+Documentar casos, entradas, salidas esperadas y comportamiento observado.
+
+# 4. Análisis de resultados
+
+Analizar variaciones según tamaño de entrada, distribución de ciudades y comportamiento de la solución.
+
+# 5. Conclusiones
+
+Redactar conclusiones técnicas y aprendizajes de ingeniería.
 # Requisitos del proyecto (interpretación operativa)
 
 ## Entrega
