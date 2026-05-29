@@ -174,6 +174,152 @@ class TestGeneradorMiniZinc(unittest.TestCase):
 
 
 # ─────────────────────────────────────────────────────────────
+# Tests de factibilidad
+# ─────────────────────────────────────────────────────────────
+
+from src.core.validador_entrada import verificar_factibilidad
+
+
+class TestFactibilidad(unittest.TestCase):
+    """
+    Pruebas para verificar_factibilidad() en validador_entrada.py.
+
+    Cubre los casos borde que harían que MiniZinc devuelva UNSATISFIABLE,
+    y los casos de advertencia donde el espacio disponible es muy reducido.
+    """
+
+    # ── Casos infactibles ──────────────────────────────────────
+
+    def test_n1_cuatro_ciudades_infactible(self):
+        """
+        N=1 tiene exactamente 4 posiciones: (0,0),(0,1),(1,0),(1,1).
+        Con 4 ciudades no queda ninguna posición libre → infactible.
+        """
+        n = 1
+        ciudades = [("A", 0, 0), ("B", 0, 1), ("C", 1, 0), ("D", 1, 1)]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertTrue(r["infactible"])
+        self.assertEqual(r["posiciones_libres"], 0)
+
+    def test_n0_una_ciudad_infactible(self):
+        """
+        N=0 tiene una sola posición: (0,0).
+        Con 1 ciudad en (0,0) no hay posición libre → infactible.
+        """
+        n = 0
+        ciudades = [("Cali", 0, 0)]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertTrue(r["infactible"])
+        self.assertEqual(r["posiciones_libres"], 0)
+
+    def test_n2_todas_posiciones_ocupadas_infactible(self):
+        """
+        N=2 tiene (2+1)²=9 posiciones.
+        Con las 9 ocupadas → infactible.
+        """
+        n = 2
+        ciudades = [
+            ("A", 0, 0), ("B", 0, 1), ("C", 0, 2),
+            ("D", 1, 0), ("E", 1, 1), ("F", 1, 2),
+            ("G", 2, 0), ("H", 2, 1), ("I", 2, 2),
+        ]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertTrue(r["infactible"])
+        self.assertEqual(r["total_posiciones"], 9)
+        self.assertEqual(r["posiciones_libres"], 0)
+
+    def test_mensaje_error_contiene_informacion_util(self):
+        """El mensaje de error debe mencionar N y el número de posiciones."""
+        n = 1
+        ciudades = [("A", 0, 0), ("B", 0, 1), ("C", 1, 0), ("D", 1, 1)]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertIn("UNSATISFIABLE", r["mensaje_error"])
+        self.assertIn("1×1", r["mensaje_error"])
+
+    # ── Casos factibles ────────────────────────────────────────
+
+    def test_n1_tres_ciudades_factible(self):
+        """
+        N=1 con 3 ciudades deja 1 posición libre → factible.
+        No debe marcar ni infactible ni advertencia (1 < 5 → sí advertencia).
+        """
+        n = 1
+        ciudades = [("A", 0, 0), ("B", 0, 1), ("C", 1, 0)]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertFalse(r["infactible"])
+        self.assertEqual(r["posiciones_libres"], 1)
+
+    def test_n10_pocas_ciudades_sin_problema(self):
+        """N=10 con solo 2 ciudades tiene muchas posiciones libres."""
+        n = 10
+        ciudades = [("Cali", 2, 3), ("Palmira", 7, 8)]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertFalse(r["infactible"])
+        self.assertFalse(r["advertencia"])
+        self.assertEqual(r["total_posiciones"], 121)
+        self.assertEqual(r["posiciones_libres"], 119)
+
+    # ── Zona de advertencia ────────────────────────────────────
+
+    def test_zona_advertencia_menos_de_5_libres(self):
+        """
+        N=2 tiene 9 posiciones. Con 5 ciudades quedan 4 libres (<5) → advertencia.
+        """
+        n = 2
+        ciudades = [
+            ("A", 0, 0), ("B", 0, 1), ("C", 0, 2),
+            ("D", 1, 0), ("E", 1, 1),
+        ]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertFalse(r["infactible"])
+        self.assertTrue(r["advertencia"])
+        self.assertEqual(r["posiciones_libres"], 4)
+
+    def test_zona_advertencia_exactamente_5_libres_no_activa(self):
+        """Con exactamente 5 posiciones libres no se activa la advertencia."""
+        n = 2
+        ciudades = [
+            ("A", 0, 0), ("B", 0, 1), ("C", 0, 2),
+            ("D", 1, 0),               # 4 ciudades → 5 libres
+        ]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertFalse(r["infactible"])
+        self.assertFalse(r["advertencia"])
+        self.assertEqual(r["posiciones_libres"], 5)
+
+    def test_mensaje_advertencia_contiene_posiciones_libres(self):
+        """El mensaje de advertencia debe indicar cuántas posiciones quedan."""
+        n = 2
+        ciudades = [
+            ("A", 0, 0), ("B", 0, 1), ("C", 0, 2),
+            ("D", 1, 0), ("E", 1, 1),
+        ]
+        r = verificar_factibilidad(n, ciudades)
+        self.assertIn("4", r["mensaje_advertencia"])   # 4 posiciones libres
+
+    # ── Integración: validar_datos bloquea el caso infactible ──
+
+    def test_validar_datos_bloquea_infactible(self):
+        """
+        validar_datos() debe incluir un error cuando el problema es infactible,
+        de modo que generar_minizinc() nunca se ejecute en ese caso.
+        """
+        n = 1
+        ciudades = [("A", 0, 0), ("B", 0, 1), ("C", 1, 0), ("D", 1, 1)]
+        errores = validar_datos(n, ciudades)
+        # Debe haber al menos un error que mencione UNSATISFIABLE
+        mensajes = " ".join(errores)
+        self.assertIn("UNSATISFIABLE", mensajes)
+
+    def test_validar_datos_permite_caso_factible(self):
+        """Un caso completamente válido y factible no debe producir errores."""
+        n = 10
+        ciudades = [("Cali", 2, 3), ("Palmira", 7, 8), ("Buga", 5, 1)]
+        errores = validar_datos(n, ciudades)
+        self.assertEqual(errores, [])
+
+
+# ─────────────────────────────────────────────────────────────
 # Punto de entrada
 # ─────────────────────────────────────────────────────────────
 

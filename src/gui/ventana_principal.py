@@ -26,7 +26,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from src.core.parser_entrada import parse_input
-from src.core.validador_entrada import validar_datos, hay_errores
+from src.core.validador_entrada import validar_datos, verificar_factibilidad, hay_errores
 from src.core.generador_minizinc import generar_codigo_minizinc
 from src.gui.componentes import AreaTextoCopiable
 from src.gui.mapa_canvas import MapaCiudades
@@ -297,8 +297,9 @@ class VentanaPrincipal(tk.Tk):
         Orquesta el flujo completo:
         1. Lee los datos de la interfaz.
         2. Parsea y valida.
-        3. Genera el código MiniZinc.
-        4. Muestra el código y cambia a la pestaña Código automáticamente.
+        3. Verifica factibilidad — distingue entre error bloqueante y advertencia.
+        4. Genera el código MiniZinc.
+        5. Muestra el código y cambia a la pestaña Código automáticamente.
         """
         # Construir texto de entrada desde la interfaz
         n_str = self.entry_n.get().strip()
@@ -310,26 +311,61 @@ class VentanaPrincipal(tk.Tk):
             partes = ciudad.split()
             texto_entrada += f"{partes[0]} {partes[1]} {partes[2]}\n"
 
-        # Parsear
+        # ── Paso 1: parsear ───────────────────────────────────────
         n, ciudades, error_parseo = parse_input(texto_entrada)
         if error_parseo:
             messagebox.showerror("Error en los datos", error_parseo)
             return
 
-        # Validar
+        # ── Paso 2: validar formato y dominio ─────────────────────
         errores = validar_datos(n, ciudades)
         if hay_errores(errores):
-            messagebox.showerror("Errores de validación",
-                                 "Corrija estos problemas:\n\n" + "\n".join(errores))
+            messagebox.showerror(
+                "Errores de validación",
+                "Corrija estos problemas:\n\n" + "\n".join(errores)
+            )
             return
 
-        # Generar código MiniZinc
+        # ── Paso 3: verificar factibilidad ────────────────────────
+        # Separamos la factibilidad de las validaciones generales para poder
+        # distinguir entre dos situaciones distintas:
+        #   - INFACTIBLE: el solver retornaría UNSATISFIABLE. Bloqueamos la
+        #     generación porque el código producido no tendría solución.
+        #   - ADVERTENCIA: quedan muy pocas posiciones libres. El problema
+        #     sigue siendo válido, pero le avisamos al usuario. Él decide
+        #     si quiere continuar o ajustar los datos.
+        factibilidad = verificar_factibilidad(n, ciudades)
+
+        if factibilidad["infactible"]:
+            # Error bloqueante: no generamos el código
+            messagebox.showerror(
+                "Problema sin solución (UNSATISFIABLE)",
+                f"{factibilidad['mensaje_error']}\n\n"
+                f"Posiciones totales en el cuadrado {n}×{n}: "
+                f"{factibilidad['total_posiciones']}\n"
+                f"Ciudades ingresadas: {len(ciudades)}\n"
+                f"Posiciones libres: {factibilidad['posiciones_libres']}"
+            )
+            return
+
+        if factibilidad["advertencia"]:
+            # Advertencia no bloqueante: el usuario puede continuar
+            continuar = messagebox.askyesno(
+                "Advertencia — espacio muy reducido",
+                f"{factibilidad['mensaje_advertencia']}\n\n"
+                f"Posiciones totales: {factibilidad['total_posiciones']}\n"
+                f"Ciudades ingresadas: {len(ciudades)}\n"
+                f"Posiciones libres: {factibilidad['posiciones_libres']}\n\n"
+                "¿Desea generar el código MiniZinc de todas formas?"
+            )
+            if not continuar:
+                return
+
+        # ── Paso 4: generar código MiniZinc ──────────────────────
         codigo = generar_codigo_minizinc({"n": n, "ciudades": ciudades})
 
-        # Mostrar código en el área de texto
+        # ── Paso 5: mostrar y cambiar de pestaña ──────────────────
         self.area_codigo.establecer_texto(codigo)
-
-        # ── NUEVO: cambiar automáticamente a la pestaña Código ────
         self.notebook.select(self.tab_codigo)
 
     def limpiar_todo(self) -> None:
