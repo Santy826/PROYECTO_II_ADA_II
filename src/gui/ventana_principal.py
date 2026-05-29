@@ -4,16 +4,21 @@ ventana_principal.py
 Ventana principal de la aplicación "¿Dónde pongo mi concierto?".
 
 Organiza la interfaz en dos áreas:
-    - Panel izquierdo : ingreso y validación de datos del problema.
+    - Panel izquierdo : ingreso de datos (dos modos: Formulario o Texto directo).
     - Panel derecho   : dos pestañas — Mapa de ciudades y Código MiniZinc.
 
-Flujo de uso:
-    1. El usuario ingresa N, M y las ciudades.
-       → el mapa se actualiza en tiempo real con cada ciudad que se agrega.
+Modos de ingreso de datos:
+    - Formulario    : el usuario ingresa N, M y cada ciudad campo por campo.
+                      El mapa se actualiza en tiempo real.
+    - Texto directo : el usuario pega o escribe el texto completo en el formato
+                      del enunciado (N / M / Ciudad X Y). Este es el modo que
+                      describe el PDF del proyecto.
+
+Flujo de uso (cualquier modo):
+    1. El usuario ingresa los datos.
     2. Presiona "Generar MiniZinc".
-       → el sistema valida, genera el código, lo muestra en la pestaña Código
-         y cambia automáticamente a esa pestaña.
-    3. El usuario copia el código y lo pega en MiniZinc IDE.
+    3. El sistema valida, genera el código y lo muestra en la pestaña Código.
+    4. El usuario copia el código y lo pega en MiniZinc IDE.
 """
 
 import tkinter as tk
@@ -21,8 +26,6 @@ from tkinter import ttk, messagebox
 import sys
 import os
 
-# Garantizar que Python encuentre el paquete src sin importar
-# desde dónde se ejecute este archivo.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from src.core.parser_entrada import parse_input
@@ -33,17 +36,13 @@ from src.gui.mapa_canvas import MapaCiudades
 
 
 class VentanaPrincipal(tk.Tk):
-    """
-    Ventana principal de la aplicación.
-    Hereda de tk.Tk para ser la ventana raíz del programa.
-    """
+    """Ventana principal de la aplicación."""
 
     def __init__(self):
         super().__init__()
         self.title("¿Dónde pongo mi concierto? — Generador MiniZinc")
-        self.geometry("1000x600")
+        self.geometry("1050x620")
         self.resizable(True, True)
-
         self._construir_layout()
 
     # ─────────────────────────────────────────
@@ -51,9 +50,8 @@ class VentanaPrincipal(tk.Tk):
     # ─────────────────────────────────────────
 
     def _construir_layout(self) -> None:
-        """Construye el layout de la ventana: título + dos paneles."""
+        """Construye título + los dos paneles principales."""
 
-        # Título
         tk.Label(
             self,
             text="¿Dónde pongo mi concierto?",
@@ -61,23 +59,22 @@ class VentanaPrincipal(tk.Tk):
             pady=7
         ).pack(fill='x')
 
-        # Marco principal que contiene los dos paneles
         marco = tk.Frame(self)
         marco.pack(fill='both', expand=True, padx=10, pady=(0, 8))
 
-        # ── Panel izquierdo: ingreso de datos ────────────────────
+        # ── Panel izquierdo ───────────────────────────────────────────
         panel_izq = tk.LabelFrame(
             marco,
             text=" Datos del problema ",
             font=("Arial", 10, "bold"),
             padx=8, pady=8,
-            width=370
+            width=380
         )
         panel_izq.pack(side=tk.LEFT, fill='y', padx=(0, 6))
         panel_izq.pack_propagate(False)
         self._construir_panel_entrada(panel_izq)
 
-        # ── Panel derecho: mapa + código MiniZinc (pestañas) ─────
+        # ── Panel derecho ─────────────────────────────────────────────
         panel_der = tk.LabelFrame(
             marco,
             text=" Visualización ",
@@ -88,61 +85,29 @@ class VentanaPrincipal(tk.Tk):
         self._construir_panel_derecho(panel_der)
 
     def _construir_panel_entrada(self, padre) -> None:
-        """Construye el panel izquierdo: campos N, M, ciudades y botones."""
+        """
+        Construye el panel izquierdo con dos pestañas de ingreso:
+            - Formulario    : entrada campo por campo.
+            - Texto directo : entrada pegando el texto completo del enunciado.
 
-        # ── N: tamaño de la cuadrícula ───────────────────────────
-        tk.Label(padre, text="1. Tamaño de la cuadrícula (N):",
-                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(0, 2))
-        self.entry_n = tk.Entry(padre, width=10)
-        self.entry_n.pack(anchor='w', pady=(0, 8))
+        Los botones de acción (Generar / Limpiar) quedan fuera de las pestañas
+        para estar siempre visibles sin importar qué pestaña esté activa.
+        """
+        # Notebook de modos de entrada
+        self.notebook_entrada = ttk.Notebook(padre)
+        self.notebook_entrada.pack(fill='both', expand=True, pady=(0, 8))
 
-        # ── M: número de ciudades ────────────────────────────────
-        tk.Label(padre, text="2. Número de ciudades (M):",
-                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(0, 2))
-        self.entry_m = tk.Entry(padre, width=10)
-        self.entry_m.pack(anchor='w', pady=(0, 8))
+        # ── Pestaña 1: Formulario ─────────────────────────────────────
+        tab_form = tk.Frame(self.notebook_entrada, padx=4, pady=4)
+        self.notebook_entrada.add(tab_form, text="  📝 Formulario  ")
+        self._construir_tab_formulario(tab_form)
 
-        # ── Agregar ciudad ───────────────────────────────────────
-        tk.Label(padre, text="3. Agregar ciudad (Nombre  X  Y):",
-                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(0, 2))
+        # ── Pestaña 2: Texto directo ──────────────────────────────────
+        tab_texto = tk.Frame(self.notebook_entrada, padx=4, pady=4)
+        self.notebook_entrada.add(tab_texto, text="  📋 Texto directo  ")
+        self._construir_tab_texto(tab_texto)
 
-        fila = tk.Frame(padre)
-        fila.pack(anchor='w', pady=(0, 4))
-
-        self.entry_nombre = tk.Entry(fila, width=12)
-        self.entry_nombre.pack(side=tk.LEFT, padx=(0, 3))
-        self.entry_nombre.insert(0, "Nombre")
-        self.entry_nombre.bind("<FocusIn>", self._limpiar_placeholder_nombre)
-
-        self.entry_x = tk.Entry(fila, width=5)
-        self.entry_x.pack(side=tk.LEFT, padx=(0, 3))
-        self.entry_x.insert(0, "X")
-        self.entry_x.bind("<FocusIn>", self._limpiar_placeholder_x)
-
-        self.entry_y = tk.Entry(fila, width=5)
-        self.entry_y.pack(side=tk.LEFT, padx=(0, 3))
-        self.entry_y.insert(0, "Y")
-        self.entry_y.bind("<FocusIn>", self._limpiar_placeholder_y)
-
-        tk.Button(
-            fila, text="Agregar",
-            command=self.agregar_ciudad,
-            bg="#607D8B", fg="white"
-        ).pack(side=tk.LEFT)
-
-        # ── Lista de ciudades ────────────────────────────────────
-        tk.Label(padre, text="Ciudades registradas:",
-                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(4, 2))
-        self.listbox = tk.Listbox(padre, height=8, font=("Courier", 9))
-        self.listbox.pack(fill='x', pady=(0, 4))
-
-        tk.Button(
-            padre, text="Eliminar ciudad seleccionada",
-            command=self.eliminar_ciudad,
-            bg="#f44336", fg="white", font=("Arial", 8)
-        ).pack(anchor='w', pady=(0, 10))
-
-        # ── Botones de acción ────────────────────────────────────
+        # ── Botones de acción (fuera del notebook) ────────────────────
         marco_botones = tk.Frame(padre)
         marco_botones.pack(fill='x')
 
@@ -163,24 +128,127 @@ class VentanaPrincipal(tk.Tk):
             font=("Arial", 9)
         ).pack(side=tk.LEFT)
 
+    def _construir_tab_formulario(self, padre) -> None:
+        """Construye la pestaña de ingreso campo por campo."""
+
+        tk.Label(padre, text="Tamaño de la cuadrícula (N):",
+                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(4, 2))
+        self.entry_n = tk.Entry(padre, width=10)
+        self.entry_n.pack(anchor='w', pady=(0, 8))
+
+        tk.Label(padre, text="Número de ciudades (M):",
+                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(0, 2))
+        self.entry_m = tk.Entry(padre, width=10)
+        self.entry_m.pack(anchor='w', pady=(0, 8))
+
+        tk.Label(padre, text="Agregar ciudad (Nombre  X  Y):",
+                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(0, 2))
+
+        fila = tk.Frame(padre)
+        fila.pack(anchor='w', pady=(0, 4))
+
+        self.entry_nombre = tk.Entry(fila, width=11)
+        self.entry_nombre.pack(side=tk.LEFT, padx=(0, 3))
+        self.entry_nombre.insert(0, "Nombre")
+        self.entry_nombre.bind("<FocusIn>", self._limpiar_placeholder_nombre)
+
+        self.entry_x = tk.Entry(fila, width=5)
+        self.entry_x.pack(side=tk.LEFT, padx=(0, 3))
+        self.entry_x.insert(0, "X")
+        self.entry_x.bind("<FocusIn>", self._limpiar_placeholder_x)
+
+        self.entry_y = tk.Entry(fila, width=5)
+        self.entry_y.pack(side=tk.LEFT, padx=(0, 3))
+        self.entry_y.insert(0, "Y")
+        self.entry_y.bind("<FocusIn>", self._limpiar_placeholder_y)
+
+        tk.Button(
+            fila, text="Agregar",
+            command=self.agregar_ciudad,
+            bg="#607D8B", fg="white"
+        ).pack(side=tk.LEFT)
+
+        tk.Label(padre, text="Ciudades registradas:",
+                 font=("Arial", 9, "bold")).pack(anchor='w', pady=(4, 2))
+        self.listbox = tk.Listbox(padre, height=7, font=("Courier", 9))
+        self.listbox.pack(fill='x', pady=(0, 4))
+
+        tk.Button(
+            padre, text="Eliminar ciudad seleccionada",
+            command=self.eliminar_ciudad,
+            bg="#f44336", fg="white", font=("Arial", 8)
+        ).pack(anchor='w')
+
+    def _construir_tab_texto(self, padre) -> None:
+        """
+        Construye la pestaña de texto directo.
+
+        El usuario pega aquí la entrada completa en el formato del enunciado:
+            N
+            M
+            Ciudad1 X1 Y1
+            Ciudad2 X2 Y2
+            ...
+
+        Las líneas en blanco se ignoran automáticamente.
+        Los nombres de ciudad pueden tener espacios (ej: "Santa Marta 5 3").
+        """
+        # Instrucciones con el formato esperado
+        tk.Label(
+            padre,
+            text="Pega o escribe la entrada en el formato del enunciado:",
+            font=("Arial", 9, "bold"),
+            anchor='w'
+        ).pack(fill='x', pady=(4, 2))
+
+        tk.Label(
+            padre,
+            text="N\nM\nCiudad1 X1 Y1\nCiudad2 X2 Y2\n...",
+            font=("Courier", 8),
+            fg="#555555",
+            justify='left',
+            bg="#F5F5F5",
+            relief='groove',
+            padx=6, pady=4
+        ).pack(fill='x', pady=(0, 6))
+
+        # Área de texto con scrollbar
+        marco_texto = tk.Frame(padre)
+        marco_texto.pack(fill='both', expand=True)
+
+        scrollbar = tk.Scrollbar(marco_texto)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.text_entrada_directa = tk.Text(
+            marco_texto,
+            yscrollcommand=scrollbar.set,
+            font=("Courier", 10),
+            wrap='none',
+            relief='sunken',
+            bg="#FAFFFE"
+        )
+        self.text_entrada_directa.pack(side=tk.LEFT, fill='both', expand=True)
+        scrollbar.config(command=self.text_entrada_directa.yview)
+
+        # Texto de ejemplo como placeholder
+        self._establecer_ejemplo_textarea()
+
+        # Limpiar el placeholder al hacer clic por primera vez
+        self.text_entrada_directa.bind("<FocusIn>", self._limpiar_placeholder_textarea)
+        self._textarea_tiene_placeholder = True
+
     def _construir_panel_derecho(self, padre) -> None:
-        """
-        Construye el panel derecho con dos pestañas:
-            - Pestaña 'Mapa'  : el widget MapaCiudades.
-            - Pestaña 'Código': el widget AreaTextoCopiable.
-        """
-        # Notebook (sistema de pestañas de tkinter)
+        """Construye el panel derecho: pestaña Mapa y pestaña Código."""
         self.notebook = ttk.Notebook(padre)
         self.notebook.pack(fill='both', expand=True)
 
-        # ── Pestaña 1: Mapa ──────────────────────────────────────
+        # Pestaña: Mapa
         tab_mapa = tk.Frame(self.notebook)
         self.notebook.add(tab_mapa, text="  🗺  Mapa de ciudades  ")
-
         self.mapa = MapaCiudades(tab_mapa)
         self.mapa.pack(fill='both', expand=True)
 
-        # ── Pestaña 2: Código MiniZinc ───────────────────────────
+        # Pestaña: Código MiniZinc
         self.tab_codigo = tk.Frame(self.notebook)
         self.notebook.add(self.tab_codigo, text="  📄  Código MiniZinc  ")
 
@@ -192,21 +260,17 @@ class VentanaPrincipal(tk.Tk):
 
         self.area_codigo = AreaTextoCopiable(self.tab_codigo, titulo="")
         self.area_codigo.pack(fill='both', expand=True)
-
         self.area_codigo.establecer_texto(
             "% El código MiniZinc aparecerá aquí\n"
             "% después de presionar 'Generar MiniZinc'.\n"
         )
 
     # ─────────────────────────────────────────
-    # Acciones de la interfaz
+    # Acciones del formulario
     # ─────────────────────────────────────────
 
     def agregar_ciudad(self) -> None:
-        """
-        Lee los campos de nombre, X e Y y agrega la ciudad a la lista.
-        Después de agregar, actualiza el mapa automáticamente.
-        """
+        """Lee los campos y agrega la ciudad a la lista. Actualiza el mapa."""
         nombre = self.entry_nombre.get().strip()
         x_str  = self.entry_x.get().strip()
         y_str  = self.entry_y.get().strip()
@@ -244,14 +308,18 @@ class VentanaPrincipal(tk.Tk):
             return
 
         if not (0 <= x_int <= n_int):
-            messagebox.showerror("Fuera de rango", f"X={x_int} debe estar entre 0 y {n_int}.")
+            messagebox.showerror("Fuera de rango",
+                                 f"X={x_int} debe estar entre 0 y {n_int}.")
             return
         if not (0 <= y_int <= n_int):
-            messagebox.showerror("Fuera de rango", f"Y={y_int} debe estar entre 0 y {n_int}.")
+            messagebox.showerror("Fuera de rango",
+                                 f"Y={y_int} debe estar entre 0 y {n_int}.")
             return
 
         for ciudad in ciudades_actuales:
             partes = ciudad.split()
+            # En el formulario los nombres no tienen espacios,
+            # por lo que partes[0] es siempre el nombre completo.
             if partes[0] == nombre:
                 messagebox.showerror("Nombre duplicado",
                                      f"Ya existe una ciudad llamada '{nombre}'.")
@@ -261,63 +329,56 @@ class VentanaPrincipal(tk.Tk):
                                      f"Ya hay una ciudad en ({x_int}, {y_int}).")
                 return
 
-        # Agregar a la lista
         self.listbox.insert(tk.END, f"{nombre}  {x_int}  {y_int}")
 
-        # Limpiar campos de entrada
         self.entry_nombre.delete(0, tk.END)
         self.entry_x.delete(0, tk.END)
         self.entry_y.delete(0, tk.END)
         self.entry_nombre.focus()
 
-        # Bloquear N y M para que no cambien mientras hay ciudades cargadas
+        # Bloquear N y M para que no cambien mientras hay ciudades
         self.entry_n.config(state='disabled')
         self.entry_m.config(state='disabled')
 
-        # ── NUEVO: actualizar el mapa con la ciudad recién agregada ──
-        self._actualizar_mapa()
+        self._actualizar_mapa_desde_formulario()
 
     def eliminar_ciudad(self) -> None:
-        """
-        Elimina la ciudad seleccionada en la listbox.
-        Después de eliminar, actualiza el mapa automáticamente.
-        """
+        """Elimina la ciudad seleccionada. Actualiza el mapa."""
         seleccion = self.listbox.curselection()
         if not seleccion:
             messagebox.showwarning("Sin selección", "Seleccione una ciudad de la lista.")
             return
-
         self.listbox.delete(seleccion[0])
+        self._actualizar_mapa_desde_formulario()
 
-        # ── NUEVO: redibujar el mapa sin la ciudad eliminada ──────
-        self._actualizar_mapa()
+    # ─────────────────────────────────────────
+    # Acción principal: generar código MiniZinc
+    # ─────────────────────────────────────────
 
     def generar_minizinc(self) -> None:
         """
-        Orquesta el flujo completo:
-        1. Lee los datos de la interfaz.
-        2. Parsea y valida.
-        3. Verifica factibilidad — distingue entre error bloqueante y advertencia.
-        4. Genera el código MiniZinc.
-        5. Muestra el código y cambia a la pestaña Código automáticamente.
+        Detecta el modo activo (Formulario o Texto directo), obtiene los datos
+        del modo correspondiente y ejecuta el flujo completo de validación
+        y generación de código MiniZinc.
         """
-        # Construir texto de entrada desde la interfaz
-        n_str = self.entry_n.get().strip()
-        m_str = self.entry_m.get().strip()
-        ciudades_raw = self.listbox.get(0, tk.END)
+        # Detectar qué pestaña de entrada está activa (0 = Formulario, 1 = Texto)
+        modo = self.notebook_entrada.index(self.notebook_entrada.select())
 
-        texto_entrada = f"{n_str}\n{m_str}\n"
-        for ciudad in ciudades_raw:
-            partes = ciudad.split()
-            texto_entrada += f"{partes[0]} {partes[1]} {partes[2]}\n"
+        if modo == 0:
+            texto_entrada = self._construir_texto_desde_formulario()
+        else:
+            texto_entrada = self._leer_texto_directo()
 
-        # ── Paso 1: parsear ───────────────────────────────────────
+        if texto_entrada is None:
+            return  # El modo ya mostró el error correspondiente
+
+        # ── Parsear ───────────────────────────────────────────────────
         n, ciudades, error_parseo = parse_input(texto_entrada)
         if error_parseo:
-            messagebox.showerror("Error en los datos", error_parseo)
+            messagebox.showerror("Error al leer los datos", error_parseo)
             return
 
-        # ── Paso 2: validar formato y dominio ─────────────────────
+        # ── Validar ───────────────────────────────────────────────────
         errores = validar_datos(n, ciudades)
         if hay_errores(errores):
             messagebox.showerror(
@@ -326,30 +387,20 @@ class VentanaPrincipal(tk.Tk):
             )
             return
 
-        # ── Paso 3: verificar factibilidad ────────────────────────
-        # Separamos la factibilidad de las validaciones generales para poder
-        # distinguir entre dos situaciones distintas:
-        #   - INFACTIBLE: el solver retornaría UNSATISFIABLE. Bloqueamos la
-        #     generación porque el código producido no tendría solución.
-        #   - ADVERTENCIA: quedan muy pocas posiciones libres. El problema
-        #     sigue siendo válido, pero le avisamos al usuario. Él decide
-        #     si quiere continuar o ajustar los datos.
+        # ── Verificar factibilidad ────────────────────────────────────
         factibilidad = verificar_factibilidad(n, ciudades)
 
         if factibilidad["infactible"]:
-            # Error bloqueante: no generamos el código
             messagebox.showerror(
                 "Problema sin solución (UNSATISFIABLE)",
                 f"{factibilidad['mensaje_error']}\n\n"
-                f"Posiciones totales en el cuadrado {n}×{n}: "
-                f"{factibilidad['total_posiciones']}\n"
+                f"Posiciones totales: {factibilidad['total_posiciones']}\n"
                 f"Ciudades ingresadas: {len(ciudades)}\n"
                 f"Posiciones libres: {factibilidad['posiciones_libres']}"
             )
             return
 
         if factibilidad["advertencia"]:
-            # Advertencia no bloqueante: el usuario puede continuar
             continuar = messagebox.askyesno(
                 "Advertencia — espacio muy reducido",
                 f"{factibilidad['mensaje_advertencia']}\n\n"
@@ -361,18 +412,22 @@ class VentanaPrincipal(tk.Tk):
             if not continuar:
                 return
 
-        # ── Paso 4: generar código MiniZinc ──────────────────────
-        codigo = generar_codigo_minizinc({"n": n, "ciudades": ciudades})
+        # ── Si el modo es Texto directo, actualizar el mapa ──────────
+        # En el formulario el mapa ya se actualiza en tiempo real.
+        # En Texto directo lo actualizamos aquí, tras el parseo exitoso.
+        if modo == 1:
+            self.mapa.dibujar_mapa(n, ciudades)
 
-        # ── Paso 5: mostrar y cambiar de pestaña ──────────────────
+        # ── Generar y mostrar código ──────────────────────────────────
+        codigo = generar_codigo_minizinc({"n": n, "ciudades": ciudades})
         self.area_codigo.establecer_texto(codigo)
         self.notebook.select(self.tab_codigo)
 
     def limpiar_todo(self) -> None:
-        """Borra todos los campos y resetea la interfaz al estado inicial."""
+        """Resetea todos los campos y el estado visual de la aplicación."""
+        # Formulario
         self.entry_n.config(state='normal')
         self.entry_m.config(state='normal')
-
         self.entry_n.delete(0, tk.END)
         self.entry_m.delete(0, tk.END)
         self.entry_nombre.delete(0, tk.END)
@@ -380,47 +435,124 @@ class VentanaPrincipal(tk.Tk):
         self.entry_y.delete(0, tk.END)
         self.listbox.delete(0, tk.END)
 
-        # ── NUEVO: limpiar el mapa ────────────────────────────────
-        self.mapa.limpiar()
+        # Texto directo
+        self._establecer_ejemplo_textarea()
+        self._textarea_tiene_placeholder = True
 
-        # Restaurar texto placeholder en el área de código
+        # Mapa y código
+        self.mapa.limpiar()
         self.area_codigo.establecer_texto(
             "% El código MiniZinc aparecerá aquí\n"
             "% después de presionar 'Generar MiniZinc'.\n"
         )
 
     # ─────────────────────────────────────────
-    # Método de sincronización con el mapa
+    # Lectura de datos según el modo activo
     # ─────────────────────────────────────────
 
-    def _actualizar_mapa(self) -> None:
+    def _construir_texto_desde_formulario(self) -> str | None:
         """
-        Lee el estado actual de la interfaz (N y la lista de ciudades)
-        y le pide al widget MapaCiudades que redibuje el mapa.
+        Reconstruye el texto de entrada a partir del formulario.
 
-        Se llama automáticamente después de agregar o eliminar una ciudad.
+        Retorna None si faltan datos (N o M no definidos), mostrando
+        el error correspondiente.
         """
-        # Leer N del campo de entrada
+        n_str = self.entry_n.get().strip()
+        m_str = self.entry_m.get().strip()
+        ciudades_raw = self.listbox.get(0, tk.END)
+
+        if not n_str:
+            messagebox.showerror("Falta N", "Ingrese el tamaño N de la cuadrícula.")
+            return None
+        if not m_str:
+            messagebox.showerror("Falta M", "Ingrese el número de ciudades M.")
+            return None
+        if not ciudades_raw:
+            messagebox.showerror("Sin ciudades", "Agregue al menos una ciudad.")
+            return None
+
+        texto = f"{n_str}\n{m_str}\n"
+        for ciudad in ciudades_raw:
+            # La listbox guarda "nombre  x  y" (nombre sin espacios en modo formulario)
+            partes = ciudad.split()
+            texto += f"{partes[0]} {partes[1]} {partes[2]}\n"
+
+        return texto
+
+    def _leer_texto_directo(self) -> str | None:
+        """
+        Lee el contenido del TextArea.
+
+        Retorna None si el área está vacía o solo tiene el placeholder.
+        """
+        if self._textarea_tiene_placeholder:
+            messagebox.showwarning(
+                "Sin datos",
+                "Escribe o pega los datos del problema en el área de texto."
+            )
+            return None
+
+        contenido = self.text_entrada_directa.get("1.0", tk.END).strip()
+        if not contenido:
+            messagebox.showwarning(
+                "Sin datos",
+                "El área de texto está vacía. "
+                "Escribe o pega los datos del problema."
+            )
+            return None
+
+        return contenido
+
+    # ─────────────────────────────────────────
+    # Sincronización del mapa (modo formulario)
+    # ─────────────────────────────────────────
+
+    def _actualizar_mapa_desde_formulario(self) -> None:
+        """
+        Redibuja el mapa con el estado actual del formulario.
+        Solo se llama desde agregar_ciudad() y eliminar_ciudad().
+        """
         n_str = self.entry_n.get().strip()
         try:
             n = int(n_str)
         except ValueError:
-            return  # N no está definido todavía, no hay nada que dibujar
+            return  # N todavía no está definido
 
-        # Construir la lista de ciudades desde la listbox
         ciudades = []
         for ciudad_str in self.listbox.get(0, tk.END):
             partes = ciudad_str.split()
-            nombre = partes[0]
-            x = int(partes[1])
-            y = int(partes[2])
-            ciudades.append((nombre, x, y))
+            ciudades.append((partes[0], int(partes[1]), int(partes[2])))
 
-        # Ordenarle al widget del mapa que redibuje
         self.mapa.dibujar_mapa(n, ciudades)
 
     # ─────────────────────────────────────────
-    # Limpieza de placeholders
+    # Placeholder del TextArea
+    # ─────────────────────────────────────────
+
+    def _establecer_ejemplo_textarea(self) -> None:
+        """Muestra el texto de ejemplo en el TextArea (placeholder visual)."""
+        self.text_entrada_directa.config(state='normal')
+        self.text_entrada_directa.delete("1.0", tk.END)
+        self.text_entrada_directa.insert(tk.END,
+            "12\n"
+            "5\n"
+            "Cali 2 3\n"
+            "Palmira 10 2\n"
+            "Buga 11 0\n"
+            "Pradera 0 3\n"
+            "Candelaria 1 2\n"
+        )
+        self.text_entrada_directa.config(fg="#AAAAAA")
+
+    def _limpiar_placeholder_textarea(self, event) -> None:
+        """Limpia el placeholder la primera vez que el usuario hace clic."""
+        if self._textarea_tiene_placeholder:
+            self.text_entrada_directa.delete("1.0", tk.END)
+            self.text_entrada_directa.config(fg="black")
+            self._textarea_tiene_placeholder = False
+
+    # ─────────────────────────────────────────
+    # Limpieza de placeholders del formulario
     # ─────────────────────────────────────────
 
     def _limpiar_placeholder_nombre(self, event) -> None:
