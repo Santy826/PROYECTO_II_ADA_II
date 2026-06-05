@@ -1,4 +1,11 @@
+% ejemplo_1.dzn
+% Datos de ejemplo para el modelo concierto_base.mzn
+%
+% Escenario: cuadrado 12x12 con 5 ciudades del Valle del Cauca
+%
+% Ciudades: Cali(2,3), Palmira(10,2), Buga(11,0), Pradera(0,3), Candelaria(1,2)
+
 N = 12;
 M = 5;
-city_x = [2, 10, 11, 0, 1];
-city_y = [3, 2, 0, 3, 2];
+ciudad_x = [2, 10, 11, 0, 1];
+ciudad_y = [3,  2,  0, 3, 2];
